@@ -32,6 +32,7 @@ export function VideoCard({ video, onRename, onExclude, onPlay }: VideoCardProps
     let objectUrl: string | undefined;
 
     const generateThumbnail = async (videoHandle?: FileSystemFileHandle) => {
+        // Sanitize the seed to be URL-friendly
         const imageSeed = encodeURIComponent(video.id.replace(/[^a-zA-Z0-9]/g, ''));
         
         if (!videoHandle) {
