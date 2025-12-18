@@ -2,7 +2,7 @@
 "use client";
 
 import Image from 'next/image';
-import { useTransition, useState, useEffect } from 'react';
+import { useTransition, useState, useEffect, useRef } from 'react';
 import { HardDriveDownload, Package, Ship, Trash2, PlayCircle } from 'lucide-react';
 import type { VideoFile } from '@/lib/types';
 import { Button } from '@/components/ui/button';
@@ -26,28 +26,26 @@ const renameOptions = [
 export function VideoCard({ video, onRename, onExclude, onPlay }: VideoCardProps) {
   const [isPending, startTransition] = useTransition();
   const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const imageSeed = useRef(video.id.replace(/[^a-zA-Z0-9]/g, ''));
 
   useEffect(() => {
     let isCancelled = false;
     let objectUrl: string | undefined;
 
-    const generateThumbnail = async (videoHandle?: FileSystemFileHandle) => {
-        // Sanitize the seed to be URL-friendly, allowing only alphanumeric characters.
-        const imageSeed = video.id.replace(/[^a-zA-Z0-9]/g, '');
-        
-        if (!videoHandle) {
-            setImageUrl(`https://picsum.photos/seed/${imageSeed}/400/225`);
+    const generateThumbnail = async () => {
+        if (!video.handle) {
+            if (!isCancelled) setImageUrl(`https://picsum.photos/seed/${imageSeed.current}/400/225`);
             return;
         }
 
         try {
-            const file = await videoHandle.getFile();
+            const file = await video.handle.getFile();
             objectUrl = URL.createObjectURL(file);
             const videoElement = document.createElement('video');
             videoElement.src = objectUrl;
-            videoElement.currentTime = 1;
+            videoElement.currentTime = 1; // Seek to 1 second
 
-            videoElement.onloadeddata = () => {
+            const onLoadedData = () => {
                 const canvas = document.createElement('canvas');
                 canvas.width = videoElement.videoWidth;
                 canvas.height = videoElement.videoHeight;
@@ -59,24 +57,32 @@ export function VideoCard({ video, onRename, onExclude, onPlay }: VideoCardProps
                     }
                 }
                 URL.revokeObjectURL(videoElement.src);
+                videoElement.removeEventListener('loadeddata', onLoadedData);
+                videoElement.removeEventListener('error', onError);
             };
 
-            videoElement.onerror = () => {
+            const onError = () => {
                 if (!isCancelled) {
-                    setImageUrl(`https://picsum.photos/seed/${imageSeed}/400/225`);
+                    setImageUrl(`https://picsum.photos/seed/${imageSeed.current}/400/225`);
                 }
                 URL.revokeObjectURL(videoElement.src);
+                videoElement.removeEventListener('loadeddata', onLoadedData);
+                videoElement.removeEventListener('error', onError);
             };
+            
+            videoElement.addEventListener('loadeddata', onLoadedData);
+            videoElement.addEventListener('error', onError);
+
         } catch (error) {
-            console.error("Error generating thumbnail:", error);
+            console.error("Error generating thumbnail for", video.name, error);
             if (!isCancelled) {
-                setImageUrl(`https://picsum.photos/seed/${imageSeed}/400/225`);
+                setImageUrl(`https://picsum.photos/seed/${imageSeed.current}/400/225`);
             }
         }
     };
 
     if (!imageUrl) {
-        generateThumbnail(video.handle);
+        generateThumbnail();
     }
 
     return () => {
@@ -85,7 +91,7 @@ export function VideoCard({ video, onRename, onExclude, onPlay }: VideoCardProps
             URL.revokeObjectURL(objectUrl);
         }
     };
-  }, [video.handle, video.id, imageUrl]);
+  }, [video.handle, video.name, imageUrl]);
   
   const handleRename = (newName: string) => {
     startTransition(() => {
@@ -100,7 +106,6 @@ export function VideoCard({ video, onRename, onExclude, onPlay }: VideoCardProps
   };
 
   const handleCardClick = (e: React.MouseEvent) => {
-    // Prevent opening video player if a button inside the card was clicked
     if ((e.target as HTMLElement).closest('button')) {
       return;
     }
@@ -123,6 +128,7 @@ export function VideoCard({ video, onRename, onExclude, onPlay }: VideoCardProps
                   sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                   className="object-cover"
                   data-ai-hint="video still"
+                  unoptimized={imageUrl.startsWith('data:')} // Disable optimization for data URIs
                 />
               ) : (
                 <Skeleton className="h-full w-full" />

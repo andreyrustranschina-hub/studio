@@ -21,6 +21,7 @@ export default function Home() {
   const [rootHandle, setRootHandle] = useState<DirectoryHandle | null>(null);
   const { toast } = useToast();
   const [recursiveScan, setRecursiveScan] = useState(true);
+  const [scanController, setScanController] = useState<AbortController | null>(null);
 
   const handleScan = async () => {
     if (typeof window.showDirectoryPicker !== 'function') {
@@ -33,16 +34,22 @@ export default function Home() {
     }
 
     try {
-      // Request read and write permissions
       const dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
       setRootHandle(dirHandle);
       setIsScanning(true);
       setVideos([]);
+      
+      const controller = new AbortController();
+      setScanController(controller);
+
       let filesFound = 0;
 
-      const processDirectory = async (directoryHandle: FileSystemDirectoryHandle, path: string, isRecursive: boolean) => {
-        if (isScanning === false) return;
+      const processDirectory = async (directoryHandle: FileSystemDirectoryHandle, path: string) => {
+        if (controller.signal.aborted) return;
+        
         for await (const entry of directoryHandle.values()) {
+          if (controller.signal.aborted) return;
+          
           const currentPath = `${path}/${entry.name}`;
           if (excludedFolders.some(excluded => currentPath.startsWith(excluded))) {
             continue;
@@ -58,31 +65,32 @@ export default function Home() {
             };
             setVideos(prevVideos => [...prevVideos, newVideo]);
             filesFound++;
-          } else if (entry.kind === 'directory' && isRecursive) {
-            await processDirectory(entry, currentPath, isRecursive);
+          } else if (entry.kind === 'directory' && recursiveScan) {
+            await processDirectory(entry, currentPath);
           }
         }
       };
 
-      await processDirectory(dirHandle, dirHandle.name, recursiveScan);
+      await processDirectory(dirHandle, dirHandle.name);
 
-      toast({
-        title: "Сканирование завершено",
-        description: `Найдено ${filesFound} видео.`,
-      });
+      if (!controller.signal.aborted) {
+        toast({
+          title: "Сканирование завершено",
+          description: `Найдено ${filesFound} видео.`,
+        });
+      }
 
     } catch (error: any) {
       if (error.name === 'AbortError') {
-        // User cancelled the picker
+        // User cancelled the directory picker.
+        // This does not trigger on our custom stop button.
       } else if (error.name === 'NotAllowedError') {
         toast({
           variant: "destructive",
           title: "Разрешение не предоставлено",
           description: "Невозможно изменить файлы без разрешения на запись.",
         });
-        // You might want to fall back to a read-only mode here
-      }
-      else {
+      } else {
         console.error("Ошибка сканирования:", error);
         toast({
           variant: "destructive",
@@ -92,6 +100,7 @@ export default function Home() {
       }
     } finally {
       setIsScanning(false);
+      setScanController(null);
     }
   };
 
@@ -99,7 +108,6 @@ export default function Home() {
     const videoToUpdate = videos.find(v => v.path === path);
     if (!videoToUpdate || !videoToUpdate.handle) return;
     
-    // Check if we have a handle with write permissions
     if (!rootHandle) {
          toast({
             variant: "destructive",
@@ -114,27 +122,22 @@ export default function Home() {
     const finalNewName = `${newName}${extension}`;
 
     try {
-        // The 'move' method is available on FileSystemFileHandle to rename it.
-        // It requires a directory handle, but we can just use the handle itself to move/rename in place.
-        // The spec is a bit tricky here. To rename, you 'move' it within its current directory.
-        // For that, we need the parent directory handle.
-        
-        const pathParts = videoToUpdate.path.split('/').slice(1, -1); // remove root dir name and filename
+        const pathParts = videoToUpdate.path.split('/').slice(1, -1);
         let currentDirHandle: FileSystemDirectoryHandle = rootHandle;
 
         for (const part of pathParts) {
             currentDirHandle = await currentDirHandle.getDirectoryHandle(part);
         }
-
-        // Now we have the parent directory handle, we can move the file.
-        // Note: The File System Access API does not have a direct 'rename' method. 'move' is used.
-        // The first argument to `move` is the destination directory.
-        await videoToUpdate.handle.move(currentDirHandle, finalNewName);
+        
+        await (videoToUpdate.handle as FileSystemFileHandle).move(currentDirHandle, finalNewName);
         
         const newPath = `${path.substring(0, path.lastIndexOf('/'))}/${finalNewName}`;
 
+        // Get the new handle after move
+        const newFileHandle = await currentDirHandle.getFileHandle(finalNewName);
+
         setVideos(currentVideos =>
-            currentVideos.map(v => (v.id === videoToUpdate.id ? { ...v, name: finalNewName, path: newPath } : v))
+            currentVideos.map(v => (v.id === videoToUpdate.id ? { ...v, name: finalNewName, path: newPath, handle: newFileHandle } : v))
         );
 
         toast({
@@ -177,11 +180,14 @@ export default function Home() {
   };
   
   const stopScan = () => {
-    setIsScanning(false);
-    toast({
-      title: "Сканирование остановлено",
-      description: "Процесс сканирования был прерван пользователем.",
-    });
+    if (scanController) {
+      scanController.abort();
+      setIsScanning(false);
+      toast({
+        title: "Сканирование остановлено",
+        description: "Процесс сканирования был прерван пользователем.",
+      });
+    }
   };
 
   return (
