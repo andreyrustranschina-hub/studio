@@ -10,10 +10,14 @@ import { FolderOpen, Loader2 } from 'lucide-react';
 
 const videoExtensions = ['.mp4', '.mov', '.mkv', '.avi', '.webm'];
 
+// This type alias is for clarity, representing the root directory handle.
+type DirectoryHandle = FileSystemDirectoryHandle;
+
 export default function Home() {
   const [videos, setVideos] = useState<VideoFile[]>([]);
   const [isScanning, setIsScanning] = useState(false);
   const [excludedFolders, setExcludedFolders] = useState<string[]>([]);
+  const [rootHandle, setRootHandle] = useState<DirectoryHandle | null>(null);
   const { toast } = useToast();
 
   const handleScan = async () => {
@@ -27,7 +31,9 @@ export default function Home() {
     }
 
     try {
-      const dirHandle = await window.showDirectoryPicker();
+      // Request read and write permissions
+      const dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+      setRootHandle(dirHandle);
       setIsScanning(true);
       setVideos([]);
       let filesFound = 0;
@@ -64,7 +70,17 @@ export default function Home() {
       });
 
     } catch (error: any) {
-      if (error.name !== 'AbortError') {
+      if (error.name === 'AbortError') {
+        // User cancelled the picker
+      } else if (error.name === 'NotAllowedError') {
+        toast({
+          variant: "destructive",
+          title: "Разрешение не предоставлено",
+          description: "Невозможно изменить файлы без разрешения на запись.",
+        });
+        // You might want to fall back to a read-only mode here
+      }
+      else {
         console.error("Ошибка сканирования:", error);
         toast({
           variant: "destructive",
@@ -77,28 +93,70 @@ export default function Home() {
     }
   };
 
-  const handleRename = (path: string, newName: string) => {
+  const handleRename = async (path: string, newName: string) => {
     const videoToUpdate = videos.find(v => v.path === path);
-    if (!videoToUpdate) return;
-
-    const extension = videoToUpdate.name.substring(videoToUpdate.name.lastIndexOf('.'));
-    const finalName = `${newName}${extension}`;
+    if (!videoToUpdate || !videoToUpdate.handle) return;
     
-    let conflictCounter = 1;
-    let tempName = finalName;
-    while(videos.some(v => v.name === tempName && v.path !== path)) {
-        tempName = `${newName}_${conflictCounter}${extension}`;
-        conflictCounter++;
+    // Check if we have a handle with write permissions
+    if (!rootHandle) {
+         toast({
+            variant: "destructive",
+            title: "Переименование невозможно",
+            description: "Корневая папка не была выбрана с правами на запись.",
+        });
+        return;
     }
 
-    setVideos(currentVideos =>
-      currentVideos.map(v => (v.path === path ? { ...v, name: tempName } : v))
-    );
-    toast({
-      title: "Файл переименован (в приложении)",
-      description: `Файл "${videoToUpdate.name}" теперь отображается как "${tempName}". Фактический файл не был изменен.`,
-    });
+    const oldName = videoToUpdate.name;
+    const extension = oldName.substring(oldName.lastIndexOf('.'));
+    const finalNewName = `${newName}${extension}`;
+
+    try {
+        // The 'move' method is available on FileSystemFileHandle to rename it.
+        // It requires a directory handle, but we can just use the handle itself to move/rename in place.
+        // The spec is a bit tricky here. To rename, you 'move' it within its current directory.
+        // For that, we need the parent directory handle.
+        
+        const pathParts = videoToUpdate.path.split('/').slice(1, -1); // remove root dir name and filename
+        let currentDirHandle: FileSystemDirectoryHandle = rootHandle;
+
+        for (const part of pathParts) {
+            currentDirHandle = await currentDirHandle.getDirectoryHandle(part);
+        }
+
+        // Now we have the parent directory handle, we can move the file.
+        // Note: The File System Access API does not have a direct 'rename' method. 'move' is used.
+        // The first argument to `move` is the destination directory.
+        await videoToUpdate.handle.move(currentDirHandle, finalNewName);
+        
+        const newPath = `${path.substring(0, path.lastIndexOf('/'))}/${finalNewName}`;
+
+        setVideos(currentVideos =>
+            currentVideos.map(v => (v.id === videoToUpdate.id ? { ...v, name: finalNewName, path: newPath } : v))
+        );
+
+        toast({
+            title: "Файл переименован",
+            description: `"${oldName}" был переименован в "${finalNewName}" на вашем диске.`,
+        });
+
+    } catch (error: any) {
+        console.error("Ошибка переименования:", error);
+        let description = "Произошла неизвестная ошибка.";
+        if (error.name === 'NotAllowedError') {
+            description = "У вас нет прав на изменение этого файла. Пожалуйста, предоставьте доступ на запись при выборе папки.";
+        } else if (error.name === 'InvalidModificationError') {
+            description = "Файл с таким именем уже существует.";
+        }
+        
+        toast({
+            variant: "destructive",
+            title: "Ошибка переименования",
+            description: description,
+        });
+    }
   };
+
 
   const handleExclude = (path: string) => {
     const folderPath = path.substring(0, path.lastIndexOf('/'));

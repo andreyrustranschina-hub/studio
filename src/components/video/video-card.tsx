@@ -113,7 +113,7 @@ export function VideoCard({ video, onRename, onExclude }: VideoCardProps) {
             <CardTitle className="text-sm font-medium break-all" title={video.name}>
               {video.name}
             </CardTitle>
-            <p className="text-xs text-muted-foreground break-all mt-1" title={video.path}>
+             <p className="text-xs text-muted-foreground break-all mt-1" title={video.path}>
               {video.path}
             </p>
           </CardContent>
