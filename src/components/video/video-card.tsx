@@ -29,54 +29,60 @@ export function VideoCard({ video, onRename, onExclude, onPlay }: VideoCardProps
 
   useEffect(() => {
     let isCancelled = false;
-    const imageSeed = encodeURIComponent(video.id.replace(/[^a-zA-Z0-9]/g, ''));
+    let objectUrl: string | undefined;
 
     const generateThumbnail = async (videoHandle?: FileSystemFileHandle) => {
-      if (!videoHandle) {
-        setImageUrl(`https://picsum.photos/seed/${imageSeed}/400/225`);
-        return;
-      }
-      try {
-        const file = await videoHandle.getFile();
-        const videoElement = document.createElement('video');
-        videoElement.src = URL.createObjectURL(file);
-        videoElement.currentTime = 1;
+        const imageSeed = encodeURIComponent(video.id.replace(/[^a-zA-Z0-9]/g, ''));
         
-        videoElement.onloadeddata = () => {
-          const canvas = document.createElement('canvas');
-          canvas.width = videoElement.videoWidth;
-          canvas.height = videoElement.videoHeight;
-          const ctx = canvas.getContext('2d');
-          if (ctx) {
-            ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
-            if (!isCancelled) {
-              setImageUrl(canvas.toDataURL('image/jpeg'));
-            }
-          }
-          URL.revokeObjectURL(videoElement.src);
-        };
-        videoElement.onerror = () => {
-           if (!isCancelled) {
-              setImageUrl(`https://picsum.photos/seed/${imageSeed}/400/225`);
-           }
-           URL.revokeObjectURL(videoElement.src);
+        if (!videoHandle) {
+            setImageUrl(`https://picsum.photos/seed/${imageSeed}/400/225`);
+            return;
         }
 
-      } catch (error) {
-        console.error("Error generating thumbnail:", error);
-        if (!isCancelled) {
-          setImageUrl(`https://picsum.photos/seed/${imageSeed}/400/225`);
+        try {
+            const file = await videoHandle.getFile();
+            objectUrl = URL.createObjectURL(file);
+            const videoElement = document.createElement('video');
+            videoElement.src = objectUrl;
+            videoElement.currentTime = 1;
+
+            videoElement.onloadeddata = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = videoElement.videoWidth;
+                canvas.height = videoElement.videoHeight;
+                const ctx = canvas.getContext('2d');
+                if (ctx) {
+                    ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+                    if (!isCancelled) {
+                        setImageUrl(canvas.toDataURL('image/jpeg'));
+                    }
+                }
+                URL.revokeObjectURL(videoElement.src);
+            };
+
+            videoElement.onerror = () => {
+                if (!isCancelled) {
+                    setImageUrl(`https://picsum.photos/seed/${imageSeed}/400/225`);
+                }
+                URL.revokeObjectURL(videoElement.src);
+            };
+        } catch (error) {
+            console.error("Error generating thumbnail:", error);
+            if (!isCancelled) {
+                setImageUrl(`https://picsum.photos/seed/${imageSeed}/400/225`);
+            }
         }
-      }
     };
 
-    generateThumbnail(video.handle);
+    if (!imageUrl) {
+        generateThumbnail(video.handle);
+    }
 
     return () => {
-      isCancelled = true;
-      if (imageUrl && imageUrl.startsWith('blob:')) {
-        URL.revokeObjectURL(imageUrl);
-      }
+        isCancelled = true;
+        if (objectUrl) {
+            URL.revokeObjectURL(objectUrl);
+        }
     };
   }, [video.handle, video.id, imageUrl]);
   
