@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState } from 'react';
@@ -19,6 +20,7 @@ export default function Home() {
   const [excludedFolders, setExcludedFolders] = useState<string[]>([]);
   const [rootHandle, setRootHandle] = useState<DirectoryHandle | null>(null);
   const { toast } = useToast();
+  const [recursiveScan, setRecursiveScan] = useState(true);
 
   const handleScan = async () => {
     if (typeof window.showDirectoryPicker !== 'function') {
@@ -56,7 +58,7 @@ export default function Home() {
             };
             setVideos(prevVideos => [...prevVideos, newVideo]);
             filesFound++;
-          } else if (entry.kind === 'directory') {
+          } else if (entry.kind === 'directory' && recursiveScan) {
             await processDirectory(entry, currentPath);
           }
         }
@@ -184,7 +186,13 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <Header onScan={handleScan} isScanning={isScanning} onStopScan={stopScan} />
+      <Header 
+        onScan={handleScan} 
+        isScanning={isScanning} 
+        onStopScan={stopScan}
+        recursiveScan={recursiveScan}
+        onRecursiveScanChange={setRecursiveScan}
+      />
       <main className="container mx-auto p-4 md:p-8">
         {isScanning && videos.length === 0 && (
           <div className="flex flex-col items-center justify-center gap-4 py-16">
