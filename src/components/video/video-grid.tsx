@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { VideoFile } from '@/lib/types';
 import { VideoCard } from '@/components/video/video-card';
+import { VideoPlayerDialog } from './video-player-dialog';
 
 interface VideoGridProps {
   videos: VideoFile[];
@@ -15,6 +16,7 @@ export function VideoGrid({ videos, onRename, onExclude }: VideoGridProps) {
   const [visibleVideos, setVisibleVideos] = useState<VideoFile[]>([]);
   const [loadMore, setLoadMore] = useState(true);
   const observer = useRef<IntersectionObserver | null>(null);
+  const [playingVideo, setPlayingVideo] = useState<VideoFile | null>(null);
   
   useEffect(() => {
     // Reset when the main video list changes (e.g., new scan)
@@ -45,6 +47,13 @@ export function VideoGrid({ videos, onRename, onExclude }: VideoGridProps) {
     if (node) observer.current.observe(node);
   }, [loadMore, visibleVideos.length, videos]);
 
+  const handlePlayVideo = (video: VideoFile) => {
+    setPlayingVideo(video);
+  };
+
+  const handleClosePlayer = () => {
+    setPlayingVideo(null);
+  };
 
   if (videos.length === 0) {
     return (
@@ -56,18 +65,32 @@ export function VideoGrid({ videos, onRename, onExclude }: VideoGridProps) {
   }
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-      {visibleVideos.map((video, index) => {
-        if (visibleVideos.length === index + 1) {
-          return (
-            <div ref={lastVideoElementRef} key={video.id}>
-              <VideoCard video={video} onRename={onRename} onExclude={onExclude} />
-            </div>
-          )
-        } else {
-           return <VideoCard key={video.id} video={video} onRename={onRename} onExclude={onExclude} />
-        }
-      })}
-    </div>
+    <>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        {visibleVideos.map((video, index) => {
+          const card = <VideoCard key={video.id} video={video} onRename={onRename} onExclude={onExclude} onPlay={handlePlayVideo} />;
+          if (visibleVideos.length === index + 1) {
+            return (
+              <div ref={lastVideoElementRef} key={video.id}>
+                {card}
+              </div>
+            )
+          } else {
+             return card;
+          }
+        })}
+      </div>
+      {playingVideo && (
+        <VideoPlayerDialog
+          video={playingVideo}
+          open={!!playingVideo}
+          onOpenChange={(isOpen) => {
+            if (!isOpen) {
+              handleClosePlayer();
+            }
+          }}
+        />
+      )}
+    </>
   );
 }

@@ -1,8 +1,9 @@
+
 "use client";
 
 import Image from 'next/image';
 import { useTransition, useState, useEffect } from 'react';
-import { HardDriveDownload, Package, Ship, Trash2 } from 'lucide-react';
+import { HardDriveDownload, Package, Ship, Trash2, PlayCircle } from 'lucide-react';
 import type { VideoFile } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,6 +14,7 @@ interface VideoCardProps {
   video: VideoFile;
   onRename: (path: string, newName: string) => void;
   onExclude: (path: string) => void;
+  onPlay: (video: VideoFile) => void;
 }
 
 const renameOptions = [
@@ -21,18 +23,16 @@ const renameOptions = [
   { name: 'Выдача груза', icon: Package },
 ];
 
-export function VideoCard({ video, onRename, onExclude }: VideoCardProps) {
+export function VideoCard({ video, onRename, onExclude, onPlay }: VideoCardProps) {
   const [isPending, startTransition] = useTransition();
   const [imageUrl, setImageUrl] = useState<string | null>(null);
 
   useEffect(() => {
     let isCancelled = false;
-    // Create a seed that is less likely to have special characters
     const imageSeed = encodeURIComponent(video.id.replace(/[^a-zA-Z0-9]/g, ''));
 
     const generateThumbnail = async (videoHandle?: FileSystemFileHandle) => {
       if (!videoHandle) {
-        // Fallback for mock data or when handle is not available
         setImageUrl(`https://picsum.photos/seed/${imageSeed}/400/225`);
         return;
       }
@@ -40,7 +40,7 @@ export function VideoCard({ video, onRename, onExclude }: VideoCardProps) {
         const file = await videoHandle.getFile();
         const videoElement = document.createElement('video');
         videoElement.src = URL.createObjectURL(file);
-        videoElement.currentTime = 1; // Seek to 1 second
+        videoElement.currentTime = 1;
         
         videoElement.onloadeddata = () => {
           const canvas = document.createElement('canvas');
@@ -92,12 +92,22 @@ export function VideoCard({ video, onRename, onExclude }: VideoCardProps) {
     });
   };
 
+  const handleCardClick = (e: React.MouseEvent) => {
+    // Prevent opening video player if a button inside the card was clicked
+    if ((e.target as HTMLElement).closest('button')) {
+      return;
+    }
+    onPlay(video);
+  };
+
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Card className={`flex flex-col overflow-hidden transition-all duration-300 hover:shadow-xl hover:-translate-y-1 ${isPending ? 'opacity-60 animate-pulse' : ''}`}>
+        <Card 
+          onClick={handleCardClick}
+          className={`flex flex-col overflow-hidden transition-all duration-300 hover:shadow-xl hover:-translate-y-1 cursor-pointer ${isPending ? 'opacity-60 animate-pulse' : ''}`}
+        >
           <CardHeader className="p-0">
-            <div className="relative aspect-video">
+            <div className="relative aspect-video group">
               {imageUrl ? (
                 <Image
                   src={imageUrl}
@@ -110,11 +120,16 @@ export function VideoCard({ video, onRename, onExclude }: VideoCardProps) {
               ) : (
                 <Skeleton className="h-full w-full" />
               )}
+               <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                <PlayCircle className="h-16 w-16 text-white/80" />
+              </div>
             </div>
           </CardHeader>
           <CardContent className="p-4 flex-grow">
             <CardTitle className="text-sm font-medium break-all" title={video.name}>
-              {video.name}
+              <DropdownMenuTrigger asChild>
+                <span className="cursor-pointer hover:underline">{video.name}</span>
+              </DropdownMenuTrigger>
             </CardTitle>
              <p className="text-xs text-muted-foreground break-all mt-1" title={video.path}>
               {video.path}
@@ -127,7 +142,7 @@ export function VideoCard({ video, onRename, onExclude }: VideoCardProps) {
                 variant="secondary"
                 className="w-full justify-start gap-2"
                 onClick={(e) => {
-                  e.stopPropagation(); // Prevent dropdown from closing
+                  e.stopPropagation(); 
                   handleRename(option.name);
                 }}
                 disabled={isPending}
@@ -138,7 +153,6 @@ export function VideoCard({ video, onRename, onExclude }: VideoCardProps) {
             ))}
           </CardFooter>
         </Card>
-      </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-56">
         <DropdownMenuItem onClick={handleExclude} disabled={isPending} className="text-destructive focus:bg-destructive/10 focus:text-destructive">
           <Trash2 className="mr-2 h-4 w-4" />
