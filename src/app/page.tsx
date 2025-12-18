@@ -40,7 +40,7 @@ export default function Home() {
       setVideos([]);
       let filesFound = 0;
 
-      const processDirectory = async (directoryHandle: FileSystemDirectoryHandle, path: string) => {
+      const processDirectory = async (directoryHandle: FileSystemDirectoryHandle, path: string, isRecursive: boolean) => {
         if (isScanning === false) return;
         for await (const entry of directoryHandle.values()) {
           const currentPath = `${path}/${entry.name}`;
@@ -58,13 +58,13 @@ export default function Home() {
             };
             setVideos(prevVideos => [...prevVideos, newVideo]);
             filesFound++;
-          } else if (entry.kind === 'directory' && recursiveScan) {
-            await processDirectory(entry, currentPath);
+          } else if (entry.kind === 'directory' && isRecursive) {
+            await processDirectory(entry, currentPath, isRecursive);
           }
         }
       };
 
-      await processDirectory(dirHandle, dirHandle.name);
+      await processDirectory(dirHandle, dirHandle.name, recursiveScan);
 
       toast({
         title: "Сканирование завершено",
