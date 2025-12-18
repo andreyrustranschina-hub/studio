@@ -147,6 +147,8 @@ export default function Home() {
             description = "У вас нет прав на изменение этого файла. Пожалуйста, предоставьте доступ на запись при выборе папки.";
         } else if (error.name === 'InvalidModificationError') {
             description = "Файл с таким именем уже существует.";
+        } else if (error.name === 'NoModificationAllowedError') {
+            description = 'Невозможно изменить файл. Возможно, у вас нет прав на запись в эту папку.';
         }
         
         toast({

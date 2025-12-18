@@ -1,6 +1,5 @@
 import type { VideoFile } from '@/lib/types';
 import { VideoCard } from '@/components/video/video-card';
-import { Button } from '../ui/button';
 
 interface VideoGridProps {
   videos: VideoFile[];
@@ -21,7 +20,7 @@ export function VideoGrid({ videos, onRename, onExclude }: VideoGridProps) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
       {videos.map(video => (
-        <VideoCard key={video.path} video={video} onRename={onRename} onExclude={onExclude} />
+        <VideoCard key={video.id} video={video} onRename={onRename} onExclude={onExclude} />
       ))}
     </div>
   );

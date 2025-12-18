@@ -137,7 +137,7 @@ export function VideoCard({ video, onRename, onExclude }: VideoCardProps) {
         </Card>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-56">
-        <DropdownMenuItem onClick={handleExclude} className="text-destructive focus:bg-destructive/10 focus:text-destructive">
+        <DropdownMenuItem onClick={handleExclude} disabled={isPending} className="text-destructive focus:bg-destructive/10 focus:text-destructive">
           <Trash2 className="mr-2 h-4 w-4" />
           <span>Исключить папку</span>
         </DropdownMenuItem>
