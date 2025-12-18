@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import { Header } from '@/components/layout/header';
 import { VideoGrid } from '@/components/video/video-grid';
-import { Progress } from '@/components/ui/progress';
 import { useToast } from "@/hooks/use-toast";
 import type { VideoFile } from '@/lib/types';
 import { Button } from '@/components/ui/button';
@@ -16,7 +15,6 @@ export default function Home() {
   const [isScanning, setIsScanning] = useState(false);
   const [excludedFolders, setExcludedFolders] = useState<string[]>([]);
   const { toast } = useToast();
-  const [scanCount, setScanCount] = useState(0);
 
   const handleScan = async () => {
     if (typeof window.showDirectoryPicker !== 'function') {
@@ -32,10 +30,10 @@ export default function Home() {
       const dirHandle = await window.showDirectoryPicker();
       setIsScanning(true);
       setVideos([]);
-      setScanCount(0);
       let filesFound = 0;
 
       const processDirectory = async (directoryHandle: FileSystemDirectoryHandle, path: string) => {
+        if (isScanning === false) return;
         for await (const entry of directoryHandle.values()) {
           const currentPath = `${path}/${entry.name}`;
           if (excludedFolders.some(excluded => currentPath.startsWith(excluded))) {
@@ -50,7 +48,6 @@ export default function Home() {
               name: file.name,
               handle: entry,
             };
-            // Update state incrementally
             setVideos(prevVideos => [...prevVideos, newVideo]);
             filesFound++;
           } else if (entry.kind === 'directory') {
@@ -99,7 +96,7 @@ export default function Home() {
     );
     toast({
       title: "Файл переименован (в приложении)",
-      description: `Файл "${videoToUpdate.name}" теперь отображается как "${tempName}".`,
+      description: `Файл "${videoToUpdate.name}" теперь отображается как "${tempName}". Фактический файл не был изменен.`,
     });
   };
 
@@ -116,10 +113,18 @@ export default function Home() {
       description: `Папка "${folderPath}" будет проигнорирована при следующем сканировании.`,
     });
   };
+  
+  const stopScan = () => {
+    setIsScanning(false);
+    toast({
+      title: "Сканирование остановлено",
+      description: "Процесс сканирования был прерван пользователем.",
+    });
+  };
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <Header onScan={handleScan} isScanning={isScanning} />
+      <Header onScan={handleScan} isScanning={isScanning} onStopScan={stopScan} />
       <main className="container mx-auto p-4 md:p-8">
         {isScanning && videos.length === 0 && (
           <div className="flex flex-col items-center justify-center gap-4 py-16">

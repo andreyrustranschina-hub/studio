@@ -1,14 +1,15 @@
 "use client";
 
-import { FolderOpen, Loader, Video } from 'lucide-react';
+import { FolderOpen, Loader, Video, X } from 'lucide-react';
 import { Button } from '../ui/button';
 
 interface HeaderProps {
   onScan: () => void;
   isScanning: boolean;
+  onStopScan: () => void;
 }
 
-export function Header({ onScan, isScanning }: HeaderProps) {
+export function Header({ onScan, isScanning, onStopScan }: HeaderProps) {
   return (
     <header className="bg-card border-b sticky top-0 z-10 shadow-sm">
       <div className="container mx-auto flex items-center justify-between h-16 px-4 md:px-8">
@@ -18,14 +19,19 @@ export function Header({ onScan, isScanning }: HeaderProps) {
             Local Video Manager
           </h1>
         </div>
-        <Button onClick={onScan} disabled={isScanning}>
+        <div>
           {isScanning ? (
-            <Loader className="animate-spin" />
+            <Button onClick={onStopScan} variant="destructive">
+              <X className="mr-2 h-4 w-4" />
+              <span>Остановить сканирование</span>
+            </Button>
           ) : (
-            <FolderOpen />
+            <Button onClick={onScan} disabled={isScanning}>
+              <FolderOpen />
+              <span>Выбрать папку для сканирования</span>
+            </Button>
           )}
-          <span>{isScanning ? 'Сканирование...' : 'Выбрать папку для сканирования'}</span>
-        </Button>
+        </div>
       </div>
     </header>
   );
