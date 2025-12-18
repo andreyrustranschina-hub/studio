@@ -27,10 +27,13 @@ export function VideoCard({ video, onRename, onExclude }: VideoCardProps) {
 
   useEffect(() => {
     let isCancelled = false;
+    // Create a seed that is less likely to have special characters
+    const imageSeed = encodeURIComponent(video.id.replace(/[^a-zA-Z0-9]/g, ''));
+
     const generateThumbnail = async (videoHandle?: FileSystemFileHandle) => {
       if (!videoHandle) {
         // Fallback for mock data or when handle is not available
-        setImageUrl(`https://picsum.photos/seed/${video.id}/400/225`);
+        setImageUrl(`https://picsum.photos/seed/${imageSeed}/400/225`);
         return;
       }
       try {
@@ -54,7 +57,7 @@ export function VideoCard({ video, onRename, onExclude }: VideoCardProps) {
         };
         videoElement.onerror = () => {
            if (!isCancelled) {
-              setImageUrl(`https://picsum.photos/seed/${video.id}/400/225`);
+              setImageUrl(`https://picsum.photos/seed/${imageSeed}/400/225`);
            }
            URL.revokeObjectURL(videoElement.src);
         }
@@ -62,7 +65,7 @@ export function VideoCard({ video, onRename, onExclude }: VideoCardProps) {
       } catch (error) {
         console.error("Error generating thumbnail:", error);
         if (!isCancelled) {
-          setImageUrl(`https://picsum.photos/seed/${video.id}/400/225`);
+          setImageUrl(`https://picsum.photos/seed/${imageSeed}/400/225`);
         }
       }
     };
@@ -75,7 +78,7 @@ export function VideoCard({ video, onRename, onExclude }: VideoCardProps) {
         URL.revokeObjectURL(imageUrl);
       }
     };
-  }, [video.handle, video.id]);
+  }, [video.handle, video.id, imageUrl]);
   
   const handleRename = (newName: string) => {
     startTransition(() => {
