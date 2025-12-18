@@ -7,16 +7,16 @@ import { Progress } from '@/components/ui/progress';
 import { useToast } from "@/hooks/use-toast";
 import type { VideoFile } from '@/lib/types';
 import { Button } from '@/components/ui/button';
-import { FolderOpen } from 'lucide-react';
+import { FolderOpen, Loader2 } from 'lucide-react';
 
 const videoExtensions = ['.mp4', '.mov', '.mkv', '.avi', '.webm'];
 
 export default function Home() {
   const [videos, setVideos] = useState<VideoFile[]>([]);
   const [isScanning, setIsScanning] = useState(false);
-  const [progress, setProgress] = useState(0);
   const [excludedFolders, setExcludedFolders] = useState<string[]>([]);
   const { toast } = useToast();
+  const [scanCount, setScanCount] = useState(0);
 
   const handleScan = async () => {
     if (typeof window.showDirectoryPicker !== 'function') {
@@ -32,9 +32,9 @@ export default function Home() {
       const dirHandle = await window.showDirectoryPicker();
       setIsScanning(true);
       setVideos([]);
-      setProgress(0);
+      setScanCount(0);
+      let filesFound = 0;
 
-      const foundVideos: VideoFile[] = [];
       const processDirectory = async (directoryHandle: FileSystemDirectoryHandle, path: string) => {
         for await (const entry of directoryHandle.values()) {
           const currentPath = `${path}/${entry.name}`;
@@ -44,16 +44,16 @@ export default function Home() {
 
           if (entry.kind === 'file' && videoExtensions.some(ext => entry.name.toLowerCase().endsWith(ext))) {
             const file = await entry.getFile();
-            foundVideos.push({
+            const newVideo: VideoFile = {
               id: `${file.name}-${file.lastModified}`,
               path: currentPath,
               name: file.name,
               handle: entry,
-            });
+            };
+            // Update state incrementally
+            setVideos(prevVideos => [...prevVideos, newVideo]);
+            filesFound++;
           } else if (entry.kind === 'directory') {
-            // This is a rough progress calculation, assuming linear scan time.
-            // A more accurate progress would require counting all files first.
-            setProgress(p => Math.min(p + 0.1, 95));
             await processDirectory(entry, currentPath);
           }
         }
@@ -61,11 +61,9 @@ export default function Home() {
 
       await processDirectory(dirHandle, dirHandle.name);
 
-      setProgress(100);
-      setVideos(foundVideos);
       toast({
         title: "Сканирование завершено",
-        description: `Найдено ${foundVideos.length} видео.`,
+        description: `Найдено ${filesFound} видео.`,
       });
 
     } catch (error: any) {
@@ -78,21 +76,17 @@ export default function Home() {
         });
       }
     } finally {
-      setTimeout(() => {
-        setIsScanning(false);
-      }, 500);
+      setIsScanning(false);
     }
   };
 
   const handleRename = (path: string, newName: string) => {
-    // This is a UI-only rename as we can't modify the user's file system directly.
     const videoToUpdate = videos.find(v => v.path === path);
     if (!videoToUpdate) return;
 
     const extension = videoToUpdate.name.substring(videoToUpdate.name.lastIndexOf('.'));
     const finalName = `${newName}${extension}`;
     
-    // Check for name conflicts in the UI state
     let conflictCounter = 1;
     let tempName = finalName;
     while(videos.some(v => v.name === tempName && v.path !== path)) {
@@ -127,14 +121,24 @@ export default function Home() {
     <div className="min-h-screen bg-background text-foreground">
       <Header onScan={handleScan} isScanning={isScanning} />
       <main className="container mx-auto p-4 md:p-8">
-        {isScanning ? (
+        {isScanning && videos.length === 0 && (
           <div className="flex flex-col items-center justify-center gap-4 py-16">
+            <Loader2 className="h-12 w-12 animate-spin text-primary" />
             <p className="text-muted-foreground">Сканирование выбранной папки...</p>
-            <Progress value={progress} className="w-full max-w-md" />
           </div>
-        ) : videos.length > 0 ? (
-          <VideoGrid videos={videos} onRename={handleRename} onExclude={handleExclude} />
-        ) : (
+        )}
+
+        {videos.length > 0 ? (
+           <>
+            {isScanning && (
+              <div className="flex items-center justify-center gap-2 mb-4 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>Идет сканирование... Найдено: {videos.length}</span>
+              </div>
+            )}
+            <VideoGrid videos={videos} onRename={handleRename} onExclude={handleExclude} />
+           </>
+        ) : !isScanning ? (
           <div className="text-center py-24">
             <FolderOpen className="mx-auto h-12 w-12 text-muted-foreground" />
             <h2 className="mt-4 text-2xl font-medium text-muted-foreground">Папка не выбрана</h2>
@@ -143,7 +147,7 @@ export default function Home() {
               Выбрать папку для сканирования
             </Button>
           </div>
-        )}
+        ) : null}
       </main>
     </div>
   );
