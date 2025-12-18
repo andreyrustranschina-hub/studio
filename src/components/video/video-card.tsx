@@ -32,8 +32,8 @@ export function VideoCard({ video, onRename, onExclude, onPlay }: VideoCardProps
     let objectUrl: string | undefined;
 
     const generateThumbnail = async (videoHandle?: FileSystemFileHandle) => {
-        // Sanitize the seed to be URL-friendly
-        const imageSeed = encodeURIComponent(video.id.replace(/[^a-zA-Z0-9]/g, ''));
+        // Sanitize the seed to be URL-friendly, allowing only alphanumeric characters.
+        const imageSeed = video.id.replace(/[^a-zA-Z0-9]/g, '');
         
         if (!videoHandle) {
             setImageUrl(`https://picsum.photos/seed/${imageSeed}/400/225`);
