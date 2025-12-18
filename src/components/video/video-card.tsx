@@ -1,12 +1,13 @@
 "use client";
 
 import Image from 'next/image';
-import { useTransition } from 'react';
+import { useTransition, useState, useEffect } from 'react';
 import { HardDriveDownload, Package, Ship, Trash2 } from 'lucide-react';
 import type { VideoFile } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface VideoCardProps {
   video: VideoFile;
@@ -22,7 +23,60 @@ const renameOptions = [
 
 export function VideoCard({ video, onRename, onExclude }: VideoCardProps) {
   const [isPending, startTransition] = useTransition();
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
 
+  useEffect(() => {
+    let isCancelled = false;
+    const generateThumbnail = async (videoHandle?: FileSystemFileHandle) => {
+      if (!videoHandle) {
+        // Fallback for mock data or when handle is not available
+        setImageUrl(`https://picsum.photos/seed/${video.id}/400/225`);
+        return;
+      }
+      try {
+        const file = await videoHandle.getFile();
+        const videoElement = document.createElement('video');
+        videoElement.src = URL.createObjectURL(file);
+        videoElement.currentTime = 1; // Seek to 1 second
+        
+        videoElement.onloadeddata = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = videoElement.videoWidth;
+          canvas.height = videoElement.videoHeight;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+            if (!isCancelled) {
+              setImageUrl(canvas.toDataURL('image/jpeg'));
+            }
+          }
+          URL.revokeObjectURL(videoElement.src);
+        };
+        videoElement.onerror = () => {
+           if (!isCancelled) {
+              setImageUrl(`https://picsum.photos/seed/${video.id}/400/225`);
+           }
+           URL.revokeObjectURL(videoElement.src);
+        }
+
+      } catch (error) {
+        console.error("Error generating thumbnail:", error);
+        if (!isCancelled) {
+          setImageUrl(`https://picsum.photos/seed/${video.id}/400/225`);
+        }
+      }
+    };
+
+    generateThumbnail(video.handle);
+
+    return () => {
+      isCancelled = true;
+      if (imageUrl && imageUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(imageUrl);
+      }
+    };
+  }, [video.handle, video.id]);
+  
   const handleRename = (newName: string) => {
     startTransition(() => {
       onRename(video.path, newName);
@@ -35,22 +89,24 @@ export function VideoCard({ video, onRename, onExclude }: VideoCardProps) {
     });
   };
 
-  const imageUrl = `https://picsum.photos/seed/${video.id}/400/225`;
-
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Card className={`flex flex-col overflow-hidden transition-all duration-300 hover:shadow-xl hover:-translate-y-1 ${isPending ? 'opacity-60 animate-pulse' : ''}`}>
           <CardHeader className="p-0">
             <div className="relative aspect-video">
-              <Image
-                src={imageUrl}
-                alt={`Preview for ${video.name}`}
-                fill
-                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                className="object-cover"
-                data-ai-hint="video still"
-              />
+              {imageUrl ? (
+                <Image
+                  src={imageUrl}
+                  alt={`Preview for ${video.name}`}
+                  fill
+                  sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                  className="object-cover"
+                  data-ai-hint="video still"
+                />
+              ) : (
+                <Skeleton className="h-full w-full" />
+              )}
             </div>
           </CardHeader>
           <CardContent className="p-4 flex-grow">
@@ -67,7 +123,10 @@ export function VideoCard({ video, onRename, onExclude }: VideoCardProps) {
                 key={option.name}
                 variant="secondary"
                 className="w-full justify-start gap-2"
-                onClick={() => handleRename(option.name)}
+                onClick={(e) => {
+                  e.stopPropagation(); // Prevent dropdown from closing
+                  handleRename(option.name);
+                }}
                 disabled={isPending}
               >
                 <option.icon className="h-4 w-4 text-muted-foreground" />
